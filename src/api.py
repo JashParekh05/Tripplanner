@@ -15,7 +15,7 @@ from flight_monitor import FlightMonitor
 
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__, static_folder='../web/build', static_url_path='')
+app = Flask(__name__, static_folder='../web', static_url_path='')
 CORS(app)  # Enable CORS for React frontend
 
 # Initialize database
