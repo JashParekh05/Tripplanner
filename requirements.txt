@@ -16,6 +16,11 @@ schedule==1.2.0
 # Notifications
 twilio==8.10.0
 
+# Web Framework (for dashboard API)
+flask==3.0.0
+flask-cors==4.0.0
+werkzeug==3.0.1
+
 # Additional utilities
 python-dateutil==2.8.2
 pytz==2023.3

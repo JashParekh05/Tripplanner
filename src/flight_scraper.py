@@ -4,9 +4,11 @@ Flight data collection service with multiple data sources
 import requests
 import logging
 import time
+import os
 from datetime import datetime
 from typing import List, Dict, Optional
 from urllib.parse import urlencode
+from .api_integrations import SkyscannerAPI, KayakAPI, MultiSourceFlightSearcher
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,13 @@ class FlightScraper:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
+
+        # Initialize multi-source searcher
+        self.multi_source = MultiSourceFlightSearcher(
+            serpapi_key=serpapi_key,
+            skyscanner_key=os.getenv('SKYSCANNER_API_KEY'),
+            kayak_key=os.getenv('KAYAK_API_KEY')
+        )
 
     def search_flights(
         self,
@@ -44,25 +53,20 @@ class FlightScraper:
             except Exception as e:
                 logger.error(f"SerpAPI search failed: {e}")
 
-        # Fallback to direct scraping methods
-        if not flights:
-            try:
-                flights.extend(self._search_kayak(
-                    origin, destination, departure_date, return_date
-                ))
-                logger.info(f"Kayak search found {len(flights)} flights")
-            except Exception as e:
-                logger.error(f"Kayak search failed: {e}")
+        # Use multi-source searcher to get results from Skyscanner and Kayak
+        try:
+            additional_flights = self.multi_source.search_all_sources(
+                origin, destination, departure_date, return_date, currency
+            )
+            flights.extend(additional_flights)
+            logger.info(f"Multi-source search found {len(additional_flights)} additional flights")
+        except Exception as e:
+            logger.error(f"Multi-source search failed: {e}")
 
-        # If still no results, try Google Flights direct
-        if not flights:
-            try:
-                flights.extend(self._search_google_flights_api(
-                    origin, destination, departure_date, return_date
-                ))
-                logger.info(f"Google Flights found {len(flights)} flights")
-            except Exception as e:
-                logger.error(f"Google Flights search failed: {e}")
+        # Mark data source for SerpAPI flights
+        for flight in flights:
+            if 'data_source' not in flight:
+                flight['data_source'] = 'serpapi'
 
         return flights
 

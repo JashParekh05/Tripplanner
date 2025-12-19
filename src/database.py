@@ -51,10 +51,17 @@ class FlightDatabase:
                     flight_url TEXT,
                     is_multi_leg BOOLEAN DEFAULT 0,
                     leg_details TEXT,
+                    data_source TEXT DEFAULT 'serpapi',
                     found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     notified BOOLEAN DEFAULT 0
                 )
             ''')
+
+            # Add data_source column to existing tables if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE flight_prices ADD COLUMN data_source TEXT DEFAULT "serpapi"')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             # Price history for trend analysis
             cursor.execute('''
@@ -101,8 +108,8 @@ class FlightDatabase:
             cursor.execute('''
                 INSERT INTO flight_prices
                 (origin, destination, departure_date, return_date, price, currency,
-                 airline, stops, flight_url, is_multi_leg, leg_details)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 airline, stops, flight_url, is_multi_leg, leg_details, data_source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 flight_data['origin'],
                 flight_data['destination'],
@@ -114,7 +121,8 @@ class FlightDatabase:
                 flight_data.get('stops', 0),
                 flight_data.get('url'),
                 flight_data.get('is_multi_leg', False),
-                flight_data.get('leg_details')
+                flight_data.get('leg_details'),
+                flight_data.get('data_source', 'serpapi')
             ))
 
             flight_id = cursor.lastrowid

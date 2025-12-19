@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tripplanner - Flight Deals Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>✈️ Tripplanner - Flight Deals Dashboard</h1>
+            <p class="subtitle">Your automated flight price monitoring system</p>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="deals">Flight Deals</button>
+            <button class="tab-btn" data-tab="search">Manual Search</button>
+            <button class="tab-btn" data-tab="config">Configuration</button>
+            <button class="tab-btn" data-tab="stats">Statistics</button>
+        </nav>
+
+        <!-- Statistics Summary Bar -->
+        <div class="stats-bar" id="statsBar">
+            <div class="stat-item">
+                <span class="stat-label">Total Deals</span>
+                <span class="stat-value" id="totalDeals">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Good Deals</span>
+                <span class="stat-value" id="goodDeals">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Lowest Price</span>
+                <span class="stat-value" id="lowestPrice">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Alerts Sent</span>
+                <span class="stat-value" id="alertsSent">-</span>
+            </div>
+        </div>
+
+        <!-- Deals Tab -->
+        <div class="tab-content active" id="deals">
+            <div class="content-header">
+                <h2>Flight Deals</h2>
+                <div class="filter-controls">
+                    <label>
+                        Max Price: $<input type="number" id="maxPriceFilter" value="600" min="0">
+                    </label>
+                    <label>
+                        Data Source:
+                        <select id="sourceFilter">
+                            <option value="all">All Sources</option>
+                            <option value="serpapi">SerpAPI</option>
+                            <option value="skyscanner">Skyscanner</option>
+                            <option value="kayak">Kayak</option>
+                        </select>
+                    </label>
+                    <button class="btn btn-primary" onclick="loadDeals()">Refresh</button>
+                </div>
+            </div>
+
+            <div id="dealsLoading" class="loading">Loading deals...</div>
+            <div id="dealsError" class="error" style="display:none;"></div>
+            <div id="dealsContainer" class="deals-grid"></div>
+        </div>
+
+        <!-- Manual Search Tab -->
+        <div class="tab-content" id="search">
+            <div class="content-header">
+                <h2>Manual Flight Search</h2>
+            </div>
+
+            <div class="search-form">
+                <div class="form-group">
+                    <label>Origin Airport</label>
+                    <input type="text" id="searchOrigin" placeholder="ATL" value="ATL">
+                </div>
+                <div class="form-group">
+                    <label>Destination Airport</label>
+                    <input type="text" id="searchDestination" placeholder="MAD">
+                </div>
+                <div class="form-group">
+                    <label>Departure Date</label>
+                    <input type="date" id="searchDepartureDate">
+                </div>
+                <div class="form-group">
+                    <label>Return Date (Optional)</label>
+                    <input type="date" id="searchReturnDate">
+                </div>
+                <button class="btn btn-primary btn-large" onclick="manualSearch()">Search Flights</button>
+            </div>
+
+            <div id="searchResults" class="search-results" style="display:none;"></div>
+        </div>
+
+        <!-- Configuration Tab -->
+        <div class="tab-content" id="config">
+            <div class="content-header">
+                <h2>Configuration</h2>
+            </div>
+
+            <div id="configLoading" class="loading">Loading configuration...</div>
+            <div id="configError" class="error" style="display:none;"></div>
+
+            <form id="configForm" class="config-form" style="display:none;">
+                <div class="form-section">
+                    <h3>Flight Search Parameters</h3>
+
+                    <div class="form-group">
+                        <label>Origin Airport</label>
+                        <input type="text" id="configOrigin" name="origin_airport">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Destination Airports (comma-separated)</label>
+                        <input type="text" id="configDestinations" name="destination_airports" placeholder="MAD,BCN,VLC">
+                    </div>
+
+                    <div class="form-group">
+                        <label>EU Hub Airports (comma-separated)</label>
+                        <input type="text" id="configHubs" name="eu_hub_airports" placeholder="LHR,CDG,AMS">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Departure Date</label>
+                        <input type="date" id="configDepartureDate" name="departure_date">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Return Date</label>
+                        <input type="date" id="configReturnDate" name="return_date">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Date Flexibility (days)</label>
+                        <input type="number" id="configFlexibility" name="date_flexibility" min="0" max="7">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Max Price ($)</label>
+                        <input type="number" id="configMaxPrice" name="max_price" min="0">
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Monitoring Settings</h3>
+
+                    <div class="form-group">
+                        <label>Check Interval (hours)</label>
+                        <input type="number" id="configInterval" name="check_interval_hours" min="1" max="24">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Price Drop Threshold ($)</label>
+                        <input type="number" id="configThreshold" name="price_drop_threshold" min="0">
+                    </div>
+
+                    <div class="form-group checkbox">
+                        <label>
+                            <input type="checkbox" id="configMultiLeg" name="enable_multi_leg_search">
+                            Enable Multi-Leg Search
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Data Sources</h3>
+                    <div id="dataSourcesStatus"></div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-large">Save Configuration</button>
+            </form>
+        </div>
+
+        <!-- Statistics Tab -->
+        <div class="tab-content" id="stats">
+            <div class="content-header">
+                <h2>System Statistics</h2>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Deals Found</h3>
+                    <div class="stat-big" id="statTotalDeals">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Deals Under Budget</h3>
+                    <div class="stat-big" id="statGoodDeals">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Lowest Price Ever</h3>
+                    <div class="stat-big" id="statLowestPrice">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Average Price</h3>
+                    <div class="stat-big" id="statAvgPrice">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Alerts Sent</h3>
+                    <div class="stat-big" id="statAlertsSent">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Searches (24h)</h3>
+                    <div class="stat-big" id="statRecentSearches">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
