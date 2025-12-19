@@ -3,6 +3,7 @@ Main flight monitoring orchestrator
 """
 import logging
 import sys
+import os
 from typing import List, Dict
 from datetime import datetime
 
@@ -10,6 +11,9 @@ from config import Config
 from database import FlightDatabase
 from flight_scraper import FlightScraper, AlternativeFlightSearcher
 from notifications import NotificationService
+
+# Ensure logs directory exists
+os.makedirs(os.path.dirname(Config.LOG_FILE), exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
