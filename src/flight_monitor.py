@@ -10,6 +10,7 @@ from config import Config
 from database import FlightDatabase
 from flight_scraper import FlightScraper, AlternativeFlightSearcher
 from notifications import NotificationService
+from train_integrations import TrainTicketSearcher, MultiModalJourneyPlanner
 
 # Configure logging
 logging.basicConfig(
@@ -40,6 +41,10 @@ class FlightMonitor:
         self.db = FlightDatabase(Config.DATABASE_PATH)
         self.scraper = FlightScraper(Config.SERPAPI_KEY)
         self.searcher = AlternativeFlightSearcher()
+
+        # Initialize train and multi-modal journey components
+        self.train_searcher = TrainTicketSearcher() if Config.ENABLE_TRAIN_SEARCH else None
+        self.multimodal_planner = MultiModalJourneyPlanner(self.train_searcher) if Config.ENABLE_TRAIN_SEARCH else None
 
         # Initialize notification service
         email_config = {
@@ -87,15 +92,19 @@ class FlightMonitor:
         logger.info(f"Searching {len(departure_dates)} departure dates and {len(return_dates)} return dates")
         logger.info(f"Destinations: {', '.join(Config.DESTINATION_AIRPORTS)}")
 
-        # 1. Search direct flights to all destination airports
+        # 1. Search direct flights to all destination airports (including alternatives if enabled)
         logger.info("\n--- Direct Flight Search ---")
+        if Config.ENABLE_ALTERNATIVE_AIRPORTS:
+            logger.info("Alternative airports enabled (e.g., Girona near Barcelona)")
+
         direct_flights = self.searcher.search_nearby_airports(
             self.scraper,
             Config.ORIGIN_AIRPORT,
             Config.DESTINATION_AIRPORTS,
             Config.DEPARTURE_DATE,
             Config.RETURN_DATE,
-            Config.CURRENCY
+            Config.CURRENCY,
+            include_alternatives=Config.ENABLE_ALTERNATIVE_AIRPORTS
         )
 
         if direct_flights:
@@ -195,6 +204,76 @@ class FlightMonitor:
             'new_lows': new_lows
         }
 
+    def create_multimodal_journeys(self, flights: List[Dict]) -> List[Dict]:
+        """
+        Create multi-modal journey options (flight + train combinations)
+
+        Args:
+            flights: List of flight options
+
+        Returns:
+            List of multi-modal journey options
+        """
+        if not Config.ENABLE_TRAIN_SEARCH or not self.multimodal_planner:
+            logger.info("Train search disabled, skipping multi-modal journey creation")
+            return []
+
+        logger.info(f"\n--- Multi-Modal Journey Planning ---")
+        logger.info(f"Creating journey combinations to final destination: {Config.FINAL_DESTINATION}")
+
+        try:
+            journeys = self.multimodal_planner.create_multimodal_journeys(
+                flights,
+                Config.FINAL_DESTINATION,
+                Config.CURRENCY
+            )
+
+            # Save journeys to database
+            for journey in journeys:
+                try:
+                    journey_id = self.db.save_multimodal_journey(journey)
+                    journey['id'] = journey_id
+                except Exception as e:
+                    logger.error(f"Failed to save journey: {e}")
+
+            # Filter for deals within budget
+            journey_deals = [j for j in journeys if j['total_price'] <= Config.MAX_PRICE]
+
+            logger.info(f"Created {len(journeys)} journey options ({len(journey_deals)} within budget)")
+
+            return journey_deals
+
+        except Exception as e:
+            logger.error(f"Error creating multi-modal journeys: {e}")
+            return []
+
+    def send_multimodal_alerts(self, journeys: List[Dict]):
+        """Send notifications for multi-modal journey deals"""
+        if not journeys:
+            logger.info("No multi-modal journeys to notify")
+            return
+
+        # Get unnotified journeys
+        unnotified = self.db.get_unnotified_multimodal_journeys(Config.MAX_PRICE)
+
+        if not unnotified:
+            logger.info("No new multi-modal journey deals to notify")
+            return
+
+        logger.info(f"Sending alerts for {len(unnotified)} new multi-modal journey deals")
+
+        try:
+            self.notifier.send_multimodal_journey_alert(unnotified, 'deal')
+
+            # Mark as notified
+            for journey in unnotified:
+                self.db.mark_multimodal_journey_notified(journey['id'])
+
+            logger.info("Multi-modal journey alerts sent successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to send multi-modal journey alerts: {e}")
+
     def send_alerts(self, categorized_flights: Dict[str, List[Dict]]):
         """Send notifications for flight deals"""
         # Get unnotified deals
@@ -244,17 +323,28 @@ class FlightMonitor:
             # Process and categorize flights
             categorized = self.process_flights(flights)
 
+            # Create multi-modal journey options (flight + train)
+            journey_deals = self.create_multimodal_journeys(flights)
+
             # Display summary
             if categorized['deals']:
-                logger.info("\n🎉 DEALS FOUND!")
+                logger.info("\n🎉 FLIGHT DEALS FOUND!")
                 for flight in sorted(categorized['deals'], key=lambda x: x['price'])[:5]:
                     logger.info(
                         f"  ${flight['price']:.0f} - {flight['origin']} → {flight['destination']} "
                         f"({flight['departure_date']})"
                     )
 
+            if journey_deals:
+                logger.info("\n🎉🚄 MULTI-MODAL JOURNEY DEALS FOUND!")
+                for journey in sorted(journey_deals, key=lambda x: x['total_price'])[:5]:
+                    logger.info(
+                        f"  ${journey['total_price']:.0f} - {journey['journey_summary']}"
+                    )
+
             # Send alerts
             self.send_alerts(categorized)
+            self.send_multimodal_alerts(journey_deals)
 
             # Cleanup old data (keep last 30 days)
             self.db.cleanup_old_data(30)

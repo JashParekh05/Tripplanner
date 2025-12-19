@@ -33,11 +33,17 @@ class Config:
     # Flight Search Parameters
     ORIGIN_AIRPORT = os.getenv('ORIGIN_AIRPORT', 'ATL')
     DESTINATION_AIRPORTS = os.getenv('DESTINATION_AIRPORTS', 'MAD,BCN,VLC,SVQ,AGP').split(',')
+    FINAL_DESTINATION = os.getenv('FINAL_DESTINATION', 'MAD')  # Ultimate destination for multi-modal journeys
     DEPARTURE_DATE = os.getenv('DEPARTURE_DATE', '2025-03-20')
     RETURN_DATE = os.getenv('RETURN_DATE', '2025-03-29')
     DATE_FLEXIBILITY = int(os.getenv('DATE_FLEXIBILITY', '3'))
     MAX_PRICE = int(os.getenv('MAX_PRICE', '600'))
     CURRENCY = os.getenv('CURRENCY', 'USD')
+
+    # Multi-Modal Journey Settings
+    ENABLE_TRAIN_SEARCH = os.getenv('ENABLE_TRAIN_SEARCH', 'true').lower() == 'true'
+    ENABLE_ALTERNATIVE_AIRPORTS = os.getenv('ENABLE_ALTERNATIVE_AIRPORTS', 'true').lower() == 'true'
+    EUR_TO_USD_RATE = float(os.getenv('EUR_TO_USD_RATE', '1.10'))  # Exchange rate for train prices
 
     # Alternative hubs for multi-leg searches
     EU_HUB_AIRPORTS = os.getenv('EU_HUB_AIRPORTS', 'LHR,CDG,AMS,FRA,FCO').split(',')
