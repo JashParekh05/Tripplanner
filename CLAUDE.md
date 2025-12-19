@@ -2,61 +2,70 @@
 
 ## Project Overview
 
-**Tripplanner** is a trip planning application repository. This document serves as a comprehensive guide for AI assistants (like Claude) working on this codebase.
+**Tripplanner** is an automated flight price monitoring system designed to find cheap flights from Atlanta (ATL) to Spain during spring break (March 2025). The system continuously monitors flight prices, tracks historical data, and sends instant alerts when deals are found.
+
+**Key Use Case**: Finding the cheapest flights to Europe (preferably Madrid, Spain area) for spring break travel within a $500-600 budget.
 
 ---
 
 ## Repository Status
 
-**Current State**: Newly initialized repository
+**Current State**: Fully functional flight monitoring system
 - **Branch**: `claude/claude-md-mjd85od5kng236vh-3LhvY`
-- **Commits**: None yet (fresh repository)
-- **Structure**: To be defined as development progresses
+- **Version**: 1.0.0
+- **Status**: Production-ready
 
 ---
 
 ## Codebase Structure
 
-### Expected Directory Layout
-
-As the project develops, organize code following these conventions:
+### Actual Directory Layout
 
 ```
-/
-├── src/                    # Source code
-│   ├── components/         # Reusable UI components
-│   ├── pages/             # Page components/routes
-│   ├── services/          # Business logic and API services
-│   ├── utils/             # Utility functions and helpers
-│   ├── hooks/             # Custom React hooks (if applicable)
-│   ├── types/             # TypeScript type definitions
-│   └── config/            # Configuration files
-├── public/                # Static assets
-├── tests/                 # Test files
-│   ├── unit/             # Unit tests
-│   ├── integration/      # Integration tests
-│   └── e2e/              # End-to-end tests
-├── docs/                  # Documentation
-├── .github/              # GitHub workflows and templates
-└── config/               # Build and deployment configuration
+Tripplanner/
+├── src/                        # Source code
+│   ├── config.py              # Configuration management
+│   ├── database.py            # SQLite database operations
+│   ├── flight_scraper.py      # Flight data collection (SerpAPI, scraping)
+│   ├── flight_monitor.py      # Main monitoring orchestrator
+│   ├── notifications.py       # Email/SMS alert system
+│   └── scheduler.py           # Continuous monitoring scheduler
+├── data/                       # Data storage
+│   └── flights.db             # SQLite database (auto-created)
+├── logs/                       # Application logs
+│   └── flight_monitor.log     # Detailed logging
+├── .env                        # Environment configuration (user creates)
+├── .env.example               # Configuration template
+├── .gitignore                 # Git ignore rules
+├── requirements.txt           # Python dependencies
+├── run.py                     # Main entry point
+├── README.md                  # User documentation
+├── setup_instructions.md      # Quick setup guide
+└── CLAUDE.md                  # This file (AI assistant guide)
 ```
-
-### Current Structure
-
-*To be updated as the codebase evolves*
 
 ---
 
 ## Technology Stack
 
-*To be determined and documented as the project setup progresses*
+**Language**: Python 3.10+
 
-Expected technologies may include:
-- **Frontend**: React, Vue, Angular, or similar
-- **Backend**: Node.js, Python, Java, or similar
-- **Database**: PostgreSQL, MongoDB, MySQL, or similar
-- **Testing**: Jest, Vitest, Pytest, or similar
-- **Build Tools**: Vite, Webpack, or similar
+**Core Libraries**:
+- `requests` - HTTP requests for API calls
+- `beautifulsoup4` - HTML parsing for web scraping
+- `selenium` - Browser automation (fallback)
+- `python-dotenv` - Environment variable management
+- `schedule` - Task scheduling
+- `sqlite3` - Built-in database (no external DB needed)
+
+**APIs & Services**:
+- SerpAPI - Google Flights data (optional, 100 free searches/month)
+- Gmail SMTP - Email notifications (required)
+- Twilio - SMS notifications (optional)
+
+**Data Storage**:
+- SQLite database for price history and deal tracking
+- File-based logging
 
 ---
 
@@ -169,52 +178,69 @@ git commit -m "feat: add trip itinerary generation component"
 
 ## Project-Specific Guidelines
 
-### Trip Planning Domain
+### Flight Price Monitoring Domain
 
-When working with trip planning features:
+This is a specialized application for monitoring and alerting on flight prices. Key domain concepts:
 
-1. **Data Models** (to be defined):
-   - Trips/Itineraries
-   - Destinations
-   - Activities/Events
-   - Bookings/Reservations
-   - Users/Travelers
-   - Budget tracking
+1. **Data Models**:
+   - `flight_prices` - Individual flight records with price, route, dates
+   - `price_history` - Historical price tracking for trend analysis
+   - `alerts_sent` - Track which deals have been notified
 
-2. **Key Features** (expected):
-   - Trip creation and management
-   - Itinerary planning
-   - Destination research
-   - Budget planning
-   - Collaboration features
-   - Calendar integration
-   - Booking management
+2. **Core Features**:
+   - **Direct Flight Search**: Search multiple Spanish destinations
+   - **Flexible Date Search**: Search ±N days from target dates
+   - **Multi-leg Optimization**: Find cheaper routes via European hubs (e.g., ATL→London→Madrid)
+   - **Price Tracking**: Store all prices, detect trends
+   - **Smart Alerting**: Only alert on genuine deals, avoid duplicates
+   - **Continuous Monitoring**: Run on schedule (every N hours)
 
-3. **User Experience**:
-   - Keep interfaces intuitive
-   - Optimize for mobile and desktop
-   - Handle offline scenarios gracefully
-   - Provide clear feedback for actions
+3. **Search Strategy**:
+   - Primary: Madrid (friend there)
+   - Secondary: Barcelona, Valencia, Seville, Malaga
+   - Multi-leg: Via London, Paris, Amsterdam, Frankfurt, Rome
+   - Budget: $500-600 target
+   - Dates: March 20-29, 2025 (flexible ±3 days)
+
+4. **Alert Logic**:
+   - Send alert if price ≤ MAX_PRICE
+   - Detect "new low" prices for a route
+   - Detect "significant price drops" (>$50)
+   - Never send duplicate alerts for same flight
+   - Include both email (required) and SMS (optional)
 
 ---
 
 ## API Integration Guidelines
 
-*To be updated when external APIs are integrated*
+### Current Integrations
 
-### Expected Integrations
-- Mapping services (Google Maps, Mapbox, etc.)
-- Weather APIs
-- Flight/hotel booking APIs
-- Currency conversion APIs
-- Translation services
+1. **SerpAPI (Optional but Recommended)**
+   - Service: Google Flights data via SerpAPI
+   - Free tier: 100 searches/month
+   - Configuration: `SERPAPI_KEY` in .env
+   - Used in: `src/flight_scraper.py`
+   - Fallback: Direct scraping if no API key
+
+2. **Gmail SMTP (Required)**
+   - Service: Email notifications
+   - Uses Gmail App Password (NOT regular password)
+   - Configuration: `EMAIL_FROM`, `EMAIL_PASSWORD` in .env
+   - Used in: `src/notifications.py`
+   - Security: Must use 2FA + App Password
+
+3. **Twilio (Optional)**
+   - Service: SMS notifications
+   - Configuration: `TWILIO_*` variables in .env
+   - Used in: `src/notifications.py`
+   - Fallback: Email-only if not configured
 
 ### API Best Practices
-- Cache responses when appropriate
-- Handle rate limiting gracefully
-- Implement proper error handling
-- Secure API keys (never commit to repository)
-- Use environment variables for configuration
+- **Rate Limiting**: 2-second delays between searches
+- **Error Handling**: Try primary API, fall back to alternatives
+- **Caching**: Database stores results, no need to re-query same data
+- **Security**: All API keys in .env (never commit)
+- **Free Tiers**: Optimize for free tier limits (100 SerpAPI calls/month)
 
 ---
 
@@ -395,8 +421,9 @@ This CLAUDE.md file should be updated whenever:
 - Important lessons are learned
 
 **Last Updated**: 2025-12-19
-**Last Updated By**: Claude (Initial creation)
+**Last Updated By**: Claude (Production release)
 **Current Branch**: `claude/claude-md-mjd85od5kng236vh-3LhvY`
+**Version**: 1.0.0 - Fully functional flight monitoring system
 
 ---
 
