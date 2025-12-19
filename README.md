@@ -1,16 +1,28 @@
-# ✈️ Flight Price Monitor
+# ✈️ Tripplanner - Flight Price Monitor
 
-Automated flight price monitoring system that searches for cheap flights from Atlanta (ATL) to Spain and sends email/SMS alerts when deals are found.
+Automated flight price monitoring system with a modern web dashboard that searches for cheap flights from Atlanta (ATL) to Spain and sends email/SMS alerts when deals are found.
 
 ## 🎯 Features
 
+### 🌐 **Web Dashboard** (NEW!)
+- **Modern UI**: Beautiful, responsive web interface for monitoring deals
+- **Real-time Updates**: View all flight deals in one place
+- **Manual Search**: Trigger on-demand flight searches
+- **Configuration Editor**: Update settings via web interface
+- **Statistics Dashboard**: Track system performance and deal history
+- **Multi-source Display**: See which API provided each deal
+
+### 🔍 **Flight Search**
+- **Multiple Data Sources**: SerpAPI (Google Flights), Skyscanner, Kayak
 - **Smart Flight Search**: Searches multiple destinations (Madrid, Barcelona, Valencia, Seville, Malaga)
 - **Flexible Dates**: Searches within ±3 days of your target dates
 - **Multi-leg Optimization**: Finds cheaper routes via European hubs (London, Paris, Amsterdam, etc.)
 - **Price Tracking**: Stores price history and detects price drops
+- **Deal Detection**: Identifies new lows and significant price drops
+
+### 📧 **Notifications**
 - **Instant Alerts**: Email and SMS notifications for great deals
 - **Continuous Monitoring**: Runs on schedule to catch deals as they appear
-- **Deal Detection**: Identifies new lows and significant price drops
 
 ## 🚀 Quick Start
 
@@ -72,7 +84,25 @@ To use Gmail for email alerts:
 
 **Never use your actual Gmail password!**
 
-### 4. Run the Monitor
+### 4. Start the Web Dashboard
+
+Launch the web dashboard to view deals and manage settings:
+
+```bash
+python run_web.py
+```
+
+The dashboard will be available at **http://localhost:5000**
+
+Features:
+- 📊 View all flight deals in a beautiful interface
+- 🔍 Trigger manual searches
+- ⚙️ Edit configuration settings
+- 📈 View system statistics
+
+See [WEB_DASHBOARD_GUIDE.md](WEB_DASHBOARD_GUIDE.md) for detailed documentation.
+
+### 5. Run the Background Monitor
 
 ```bash
 # One-time check
@@ -181,8 +211,9 @@ SERPAPI_KEY=your-serpapi-key
 ## 📊 How It Works
 
 1. **Data Collection**
-   - Uses SerpAPI to fetch Google Flights data
-   - Falls back to direct scraping if needed
+   - Queries multiple data sources: SerpAPI (Google Flights), Skyscanner API, Kayak API
+   - Aggregates results from all configured sources
+   - Deduplicates and tags each flight with its data source
    - Searches multiple destinations and date combinations
 
 2. **Price Analysis**
@@ -210,12 +241,18 @@ SERPAPI_KEY=your-serpapi-key
 ```
 Tripplanner/
 ├── src/
+│   ├── api.py              # Flask REST API backend
+│   ├── api_integrations.py # Skyscanner & Kayak API clients
 │   ├── config.py           # Configuration management
 │   ├── database.py         # Database operations
-│   ├── flight_scraper.py   # Flight data collection
+│   ├── flight_scraper.py   # Flight data collection (multi-source)
 │   ├── flight_monitor.py   # Main monitoring logic
 │   ├── notifications.py    # Email/SMS alerts
 │   └── scheduler.py        # Scheduling system
+├── web/
+│   ├── index.html          # Web dashboard UI
+│   ├── style.css           # Dashboard styling
+│   └── app.js              # Dashboard JavaScript
 ├── data/
 │   └── flights.db          # SQLite database (auto-created)
 ├── logs/
@@ -223,9 +260,11 @@ Tripplanner/
 ├── .env                    # Your configuration (create from .env.example)
 ├── .env.example           # Configuration template
 ├── requirements.txt       # Python dependencies
-├── run.py                 # Main entry point
-├── README.md             # This file
-└── CLAUDE.md             # AI assistant guide
+├── run.py                 # Background monitor entry point
+├── run_web.py             # Web dashboard server entry point
+├── README.md              # This file
+├── WEB_DASHBOARD_GUIDE.md # Web dashboard documentation
+└── CLAUDE.md              # AI assistant guide
 ```
 
 ## 🎯 Your Specific Use Case
