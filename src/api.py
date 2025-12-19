@@ -9,9 +9,9 @@ import os
 from datetime import datetime
 from typing import Dict, List
 
-from .database import FlightDatabase
-from .config import Config
-from .flight_monitor import FlightMonitor
+from database import FlightDatabase
+from config import Config
+from flight_monitor import FlightMonitor
 
 logger = logging.getLogger(__name__)
 

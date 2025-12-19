@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 from typing import List, Dict, Optional
 from urllib.parse import urlencode
-from .api_integrations import SkyscannerAPI, KayakAPI, MultiSourceFlightSearcher
+from api_integrations import SkyscannerAPI, KayakAPI, MultiSourceFlightSearcher
 
 logger = logging.getLogger(__name__)
 
