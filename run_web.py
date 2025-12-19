@@ -6,6 +6,7 @@ Starts the Flask API server for the web dashboard
 import sys
 import os
 import logging
+import argparse
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -27,6 +28,13 @@ logger = logging.getLogger(__name__)
 
 def main():
     """Start the web dashboard server"""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Tripplanner Web Dashboard Server')
+    parser.add_argument('--port', type=int, default=None, help='Port to run the server on (default: 5000)')
+    parser.add_argument('--host', type=str, default=None, help='Host to bind to (default: 0.0.0.0)')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    args = parser.parse_args()
+
     logger.info("="*60)
     logger.info("Starting Tripplanner Web Dashboard")
     logger.info("="*60)
@@ -42,10 +50,10 @@ def main():
     os.makedirs('logs', exist_ok=True)
     os.makedirs('data', exist_ok=True)
 
-    # Server configuration
-    host = os.getenv('WEB_HOST', '0.0.0.0')
-    port = int(os.getenv('WEB_PORT', '5000'))
-    debug = os.getenv('WEB_DEBUG', 'false').lower() == 'true'
+    # Server configuration (command-line args override environment variables)
+    host = args.host or os.getenv('WEB_HOST', '0.0.0.0')
+    port = args.port or int(os.getenv('WEB_PORT', '5000'))
+    debug = args.debug or (os.getenv('WEB_DEBUG', 'false').lower() == 'true')
 
     logger.info(f"Dashboard will be available at: http://{host}:{port}")
     logger.info(f"Local access: http://localhost:{port}")
