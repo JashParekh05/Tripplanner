@@ -8,9 +8,21 @@ import os
 from datetime import datetime
 from typing import List, Dict, Optional
 from urllib.parse import urlencode
-from .api_integrations import SkyscannerAPI, KayakAPI, MultiSourceFlightSearcher
+from api_integrations import SkyscannerAPI, KayakAPI, MultiSourceFlightSearcher
+from booking_url_generator import FlightBookingURLGenerator
 
 logger = logging.getLogger(__name__)
+
+# Nearby/alternative airports in Spain for comprehensive searching
+SPANISH_AIRPORTS_EXTENDED = {
+    'MAD': ['MAD'],  # Madrid - no major alternatives nearby
+    'BCN': ['BCN', 'GRO'],  # Barcelona + Girona (budget airlines)
+    'VLC': ['VLC', 'ALC'],  # Valencia + Alicante
+    'SVQ': ['SVQ'],  # Seville
+    'AGP': ['AGP', 'GRX'],  # Malaga + Granada
+    'BIO': ['BIO'],  # Bilbao
+    'PMI': ['PMI'],  # Palma de Mallorca
+}
 
 class FlightScraper:
     """Collects flight price data from multiple sources"""
@@ -148,6 +160,11 @@ class FlightScraper:
         # Count stops
         stops = len(flights_info) - 1 if flights_info else 0
 
+        # Generate booking URLs for all major platforms
+        booking_urls = FlightBookingURLGenerator.generate_booking_urls(
+            origin, destination, departure_date, return_date
+        )
+
         return {
             'origin': origin,
             'destination': destination,
@@ -157,7 +174,8 @@ class FlightScraper:
             'currency': currency,
             'airline': airline,
             'stops': stops,
-            'url': flight_data.get('booking_token', ''),
+            'url': booking_urls['google_flights'],  # Primary URL
+            'booking_urls': booking_urls,  # All platform URLs
             'is_multi_leg': False,
             'leg_details': None
         }
@@ -261,6 +279,13 @@ class FlightScraper:
                 # Combine the legs
                 total_price = leg1_cheapest['price'] + leg2_cheapest['price']
 
+                # Generate booking URLs (users need to book separately)
+                booking_urls = {
+                    'leg1_url': leg1_cheapest.get('url', ''),
+                    'leg2_url': leg2_cheapest.get('url', ''),
+                    'note': 'Multi-leg flights must be booked separately'
+                }
+
                 multi_leg_options.append({
                     'origin': origin,
                     'destination': final_destination,
@@ -270,7 +295,8 @@ class FlightScraper:
                     'currency': currency,
                     'airline': f"{leg1_cheapest['airline']} + {leg2_cheapest['airline']}",
                     'stops': leg1_cheapest['stops'] + leg2_cheapest['stops'] + 1,
-                    'url': f"Multi-leg via {hub}",
+                    'url': leg1_cheapest.get('url', ''),  # Primary URL for first leg
+                    'booking_urls': booking_urls,
                     'is_multi_leg': True,
                     'leg_details': f"Leg 1: {origin}-{hub} ${leg1_cheapest['price']}, Leg 2: {hub}-{final_destination} ${leg2_cheapest['price']}"
                 })
@@ -296,14 +322,43 @@ class AlternativeFlightSearcher:
         destination_airports: List[str],
         departure_date: str,
         return_date: Optional[str],
-        currency: str = 'USD'
+        currency: str = 'USD',
+        include_alternatives: bool = True
     ) -> List[Dict]:
         """
         Search multiple destination airports to find cheapest option
+        Also searches nearby/alternative airports if enabled
+
+        Args:
+            scraper: FlightScraper instance
+            origin: Origin airport code
+            destination_airports: List of primary destination airports
+            departure_date: Departure date
+            return_date: Return date (optional)
+            currency: Currency code
+            include_alternatives: Also search nearby airports (e.g., GRO near BCN)
+
+        Returns:
+            List of all flight options found
         """
         all_flights = []
+        airports_to_search = set()
 
-        for dest in destination_airports:
+        # Add primary destinations
+        airports_to_search.update(destination_airports)
+
+        # Add alternative airports if enabled
+        if include_alternatives:
+            for dest in destination_airports:
+                if dest in SPANISH_AIRPORTS_EXTENDED:
+                    alternatives = SPANISH_AIRPORTS_EXTENDED[dest]
+                    airports_to_search.update(alternatives)
+                    if len(alternatives) > 1:
+                        logger.info(f"Searching {dest} and alternatives: {alternatives}")
+
+        logger.info(f"Searching {len(airports_to_search)} airports total")
+
+        for dest in airports_to_search:
             try:
                 flights = scraper.search_flights(
                     origin, dest, departure_date, return_date, currency
