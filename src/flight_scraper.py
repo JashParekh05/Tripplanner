@@ -8,8 +8,8 @@ import os
 from datetime import datetime
 from typing import List, Dict, Optional
 from urllib.parse import urlencode
-from .api_integrations import SkyscannerAPI, KayakAPI, MultiSourceFlightSearcher
-from .booking_url_generator import FlightBookingURLGenerator
+from api_integrations import SkyscannerAPI, KayakAPI, MultiSourceFlightSearcher
+from booking_url_generator import FlightBookingURLGenerator
 
 logger = logging.getLogger(__name__)
 
