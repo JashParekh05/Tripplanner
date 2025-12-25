@@ -7,8 +7,9 @@ from typing import List, Dict
 from datetime import datetime
 
 from config import Config
-from database import FlightDatabase
-from flight_scraper import FlightScraper, AlternativeFlightSearcher
+from database_optimized import OptimizedFlightDatabase
+from flight_scraper import FlightScraper
+from flight_scraper_optimized import OptimizedFlightSearcher
 from notifications import NotificationService
 from train_integrations import TrainTicketSearcher, MultiModalJourneyPlanner
 
@@ -37,14 +38,17 @@ class FlightMonitor:
                 logger.error(f"Configuration error: {error}")
             raise ValueError("Invalid configuration. Check .env file.")
 
-        # Initialize components
-        self.db = FlightDatabase(Config.DATABASE_PATH)
+        # Initialize components with optimized versions
+        self.db = OptimizedFlightDatabase(Config.DATABASE_PATH)
         self.scraper = FlightScraper(Config.SERPAPI_KEY)
-        self.searcher = AlternativeFlightSearcher()
+        self.searcher = OptimizedFlightSearcher(self.scraper, max_workers=5)
 
         # Initialize train and multi-modal journey components
         self.train_searcher = TrainTicketSearcher() if Config.ENABLE_TRAIN_SEARCH else None
         self.multimodal_planner = MultiModalJourneyPlanner(self.train_searcher) if Config.ENABLE_TRAIN_SEARCH else None
+
+        logger.info("✓ Using optimized flight searcher with parallel processing")
+        logger.info("✓ Using optimized database with batch operations")
 
         # Initialize notification service
         email_config = {
@@ -92,13 +96,12 @@ class FlightMonitor:
         logger.info(f"Searching {len(departure_dates)} departure dates and {len(return_dates)} return dates")
         logger.info(f"Destinations: {', '.join(Config.DESTINATION_AIRPORTS)}")
 
-        # 1. Search direct flights to all destination airports (including alternatives if enabled)
-        logger.info("\n--- Direct Flight Search ---")
+        # 1. Search direct flights to all destination airports (PARALLEL & OPTIMIZED)
+        logger.info("\n--- Direct Flight Search (Parallel) ---")
         if Config.ENABLE_ALTERNATIVE_AIRPORTS:
             logger.info("Alternative airports enabled (e.g., Girona near Barcelona)")
 
-        direct_flights = self.searcher.search_nearby_airports(
-            self.scraper,
+        direct_flights = self.searcher.search_airports_parallel(
             Config.ORIGIN_AIRPORT,
             Config.DESTINATION_AIRPORTS,
             Config.DEPARTURE_DATE,
@@ -113,37 +116,38 @@ class FlightMonitor:
         else:
             logger.warning("No direct flights found")
 
-        # 2. Search flexible dates (if we have direct flights, focus on best routes)
+        # 2. Search flexible dates (SMART & OPTIMIZED)
         if direct_flights:
-            logger.info("\n--- Flexible Date Search ---")
+            logger.info("\n--- Flexible Date Search (Smart) ---")
             # Get the cheapest destination
             best_dest = min(direct_flights, key=lambda x: x['price'])['destination']
             logger.info(f"Searching flexible dates for best destination: {best_dest}")
 
-            flexible_flights = self.searcher.search_flexible_dates(
-                self.scraper,
+            flexible_flights = self.searcher.search_flexible_dates_smart(
                 Config.ORIGIN_AIRPORT,
                 best_dest,
-                departure_dates[:3],  # Limit to avoid too many requests
-                return_dates[:3],
-                Config.CURRENCY
+                departure_dates[:5],  # Can search more with smart algorithm
+                return_dates[:5],
+                Config.CURRENCY,
+                max_searches=9  # Strategic searches instead of all combinations
             )
 
             if flexible_flights:
                 logger.info(f"Found {len(flexible_flights)} flights with flexible dates")
                 all_flights.extend(flexible_flights)
 
-        # 3. Search multi-leg options if enabled
+        # 3. Search multi-leg options if enabled (OPTIMIZED WITH EARLY TERMINATION)
         if Config.ENABLE_MULTI_LEG_SEARCH:
-            logger.info("\n--- Multi-Leg Search ---")
+            logger.info("\n--- Multi-Leg Search (Optimized) ---")
             for destination in Config.DESTINATION_AIRPORTS:
-                multi_leg_flights = self.scraper.search_multi_leg(
+                multi_leg_flights = self.searcher.search_multi_leg_optimized(
                     Config.ORIGIN_AIRPORT,
                     Config.EU_HUB_AIRPORTS,
                     destination,
                     Config.DEPARTURE_DATE,
                     Config.RETURN_DATE,
-                    Config.CURRENCY
+                    Config.CURRENCY,
+                    max_price_per_leg=Config.MAX_PRICE * 0.8  # Don't combine expensive legs
                 )
 
                 if multi_leg_flights:
@@ -158,7 +162,7 @@ class FlightMonitor:
 
     def process_flights(self, flights: List[Dict]) -> Dict[str, List[Dict]]:
         """
-        Process found flights and categorize them
+        Process found flights and categorize them (OPTIMIZED WITH BATCH OPERATIONS)
 
         Returns:
             Dictionary with categories: 'deals', 'price_drops', 'new_lows'
@@ -167,15 +171,21 @@ class FlightMonitor:
         price_drops = []
         new_lows = []
 
-        for flight in flights:
-            # Save to database
-            try:
-                flight_id = self.db.save_flight_price(flight)
-                flight['id'] = flight_id
-            except Exception as e:
-                logger.error(f"Failed to save flight: {e}")
-                continue
+        # OPTIMIZATION: Save all flights in one batch operation
+        try:
+            flight_ids = self.db.save_flight_price_batch(flights)
 
+            # Add IDs to flight objects
+            for flight, flight_id in zip(flights, flight_ids):
+                flight['id'] = flight_id
+
+            logger.info(f"✓ Batch saved {len(flights)} flights to database")
+        except Exception as e:
+            logger.error(f"Failed to batch save flights: {e}")
+            return {'deals': [], 'price_drops': [], 'new_lows': []}
+
+        # Categorize flights
+        for flight in flights:
             # Check if it's a deal (below max price)
             if flight['price'] <= Config.MAX_PRICE:
                 deals.append(flight)
@@ -275,7 +285,7 @@ class FlightMonitor:
             logger.error(f"Failed to send multi-modal journey alerts: {e}")
 
     def send_alerts(self, categorized_flights: Dict[str, List[Dict]]):
-        """Send notifications for flight deals"""
+        """Send notifications for flight deals (OPTIMIZED WITH BATCH OPERATIONS)"""
         # Get unnotified deals
         unnotified = self.db.get_unnotified_deals(Config.MAX_PRICE)
 
@@ -297,11 +307,11 @@ class FlightMonitor:
         try:
             self.notifier.send_flight_alert(unnotified, alert_type)
 
-            # Mark flights as notified
-            for flight in unnotified:
-                self.db.mark_as_notified(flight['id'])
+            # OPTIMIZATION: Mark all flights as notified in one batch operation
+            flight_ids = [flight['id'] for flight in unnotified]
+            self.db.mark_as_notified_batch(flight_ids, alert_type)
 
-            logger.info("Alerts sent successfully")
+            logger.info("✓ Alerts sent and marked as notified (batch)")
 
         except Exception as e:
             logger.error(f"Failed to send alerts: {e}")
